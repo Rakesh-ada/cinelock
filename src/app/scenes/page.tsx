@@ -129,7 +129,7 @@ export default function ScenesPage() {
                 {/* Grid */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar px-8 pb-8">
                     {assets.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-in fade-in duration-500">
+                        <div className="flex flex-col items-center justify-center h-full min-h-[60vh] text-center px-4 animate-in fade-in duration-500">
                             <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6 ring-1 ring-white/10">
                                 <ImageIcon className="w-10 h-10 text-gray-400 opacity-50 stroke-[1.5]" />
                             </div>
