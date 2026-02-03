@@ -201,10 +201,20 @@ export async function addBudgetItemAction(data: Partial<IBudgetItem>): Promise<I
 }
 
 export async function addBudgetItemsBulkAction(items: Partial<IBudgetItem>[]): Promise<IBudgetItem[]> {
+    console.log("[ACTION] addBudgetItemsBulkAction called with", items.length, "items");
     const { userId } = await auth();
-    if (!userId) return [];
+    if (!userId) {
+        console.error("[ACTION] addBudgetItemsBulkAction failed: No userId");
+        return [];
+    }
 
-    await connectToDatabase();
+    try {
+        await connectToDatabase();
+        console.log("[ACTION] Database connected for bulk insert");
+    } catch (error: any) {
+        console.error("[ACTION] Database connection failed:", error.message);
+        throw error;
+    }
 
     const docs = (Array.isArray(items) ? items : []).map((data) => ({
         id: data.id || crypto.randomUUID(),
@@ -232,7 +242,9 @@ export async function addBudgetItemsBulkAction(items: Partial<IBudgetItem>[]): P
     }));
 
     // @ts-ignore
-    await BudgetItem.bulkWrite(ops, { ordered: false });
+    const result = await BudgetItem.bulkWrite(ops, { ordered: false });
+    console.log("[ACTION] Bulk insert completed:", result.upsertedCount, "inserted,", result.modifiedCount, "modified");
+    
     revalidatePath('/budget');
     return [];
 }
@@ -270,10 +282,22 @@ export async function getScenes(): Promise<IScene[]> {
 }
 
 export async function createSceneAction(data: Partial<IScene>): Promise<IScene | null> {
+    console.log("[ACTION] createSceneAction called with data:", { id: data.id, projectId: data.projectId, sessionId: data.sessionId });
     const { userId } = await auth();
-    if (!userId) return null;
+    if (!userId) {
+        console.error("[ACTION] createSceneAction failed: No userId");
+        return null;
+    }
+    console.log("[ACTION] User authenticated:", userId);
 
-    await connectToDatabase();
+    try {
+        await connectToDatabase();
+        console.log("[ACTION] Database connected");
+    } catch (error: any) {
+        console.error("[ACTION] Database connection failed:", error.message);
+        throw error;
+    }
+    
     const newScene = await Scene.create({
         id: data.id || crypto.randomUUID(),
         imageUrl: data.imageUrl,
@@ -284,6 +308,8 @@ export async function createSceneAction(data: Partial<IScene>): Promise<IScene |
         userId,
         sessionId: data.sessionId
     });
+    
+    console.log("[ACTION] Scene created successfully:", newScene.id);
 
     // revalidatePath('/chat'); // Scenes might be displayed in chat
     revalidatePath('/scenes');

@@ -6,10 +6,13 @@ export async function POST(req: Request) {
         const { imageUrl, projectContext } = await req.json();
 
         if (!imageUrl) {
+            console.error("[BUDGET] Missing imageUrl in request");
             return NextResponse.json({ error: "Image URL is required" }, { status: 400 });
         }
 
-        console.log("Analyzing budget for image...");
+        console.log("[BUDGET] Analyzing budget for image:", imageUrl.substring(0, 50) + "...");
+        console.log("[BUDGET] Project context:", projectContext ? "Present" : "None");
+        console.log("[BUDGET] API Key present:", !!process.env.POLLINATIONS_API_KEY);
 
         const contextPrompt = projectContext
             ? `Project Context: ${JSON.stringify(projectContext)}. Use this context (Scale, Genre, Budget Limit) to scale the estimated costs appropriately. `
@@ -69,17 +72,20 @@ export async function POST(req: Request) {
 
         // Attempt 1: Gemini Search (preferred)
         try {
-            console.log("Attempting with model: gemini-search");
+            console.log("[BUDGET] Attempting with model: gemini-search");
             data = await fetchBudget("gemini-search");
+            console.log("[BUDGET] gemini-search succeeded");
         } catch (e: any) {
-            console.warn("gemini-search failed:", e.message);
+            console.error("[BUDGET] gemini-search failed:", e.message, e.stack);
             // Attempt 2: OpenAI (fallback)
             // OpenAI model on Pollinations usually supports vision (GPT-4o or similar)
-            console.log("Falling back to model: openai");
+            console.log("[BUDGET] Falling back to model: openai");
             data = await fetchBudget("openai");
+            console.log("[BUDGET] openai fallback succeeded");
         }
 
         const content = data?.choices?.[0]?.message?.content || "Could not generate budget analysis.";
+        console.log("[BUDGET] Budget generated successfully, length:", content.length);
         return NextResponse.json({ content });
 
     } catch (error: any) {

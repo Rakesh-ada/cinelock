@@ -8,6 +8,7 @@ import {
     Plus,
     Trash2
 } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ export function AppSidebar({
     onDeleteChat
 }: AppSidebarProps) {
     const pathname = usePathname();
+    const { user } = useUser();
 
     const handleNewChat = () => {
         if (onNewChat) {
@@ -74,13 +76,13 @@ export function AppSidebar({
                 {/* User Profile / Workspace Switcher */}
                 <div className="flex items-center gap-3 px-3 h-14 mb-4 group min-w-[240px] hover:bg-cream-white/5 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-cream-white/5 mt-2">
                     <img
-                        src="/user-avatar.png"
+                        src={user?.imageUrl || "/user-avatar.png"}
                         alt="Profile"
                         className="w-8 h-8 rounded-full object-cover border border-cream-white/10 group-hover:border-cinelock-accent/50 transition-colors"
                     />
-                    <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium text-cream-white group-hover:text-cinelock-accent transition-colors truncate tracking-wide">Alex Morgan</h3>
-                        <p className="text-xs text-blue-200/70 truncate group-hover:text-blue-200 transition-colors">Creative Director</p>
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                        <h3 className="text-sm font-medium text-cream-white group-hover:text-cinelock-accent transition-colors truncate tracking-wide">{user?.fullName || user?.username || "User"}</h3>
+                        <p className="text-xs text-blue-200/70 truncate group-hover:text-blue-200 transition-colors whitespace-nowrap overflow-hidden text-ellipsis">{user?.primaryEmailAddress?.emailAddress || ""}</p>
                     </div>
                     <button
                         onClick={() => setIsSidebarOpen(false)}

@@ -10,7 +10,7 @@ import {
     ArrowUp,
     ChevronRight,
     X,
-    Search,
+    Share2,
     Paperclip
 } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -29,8 +29,10 @@ import {
     getProjects as fetchProjects,
     getScenes,
     createSceneAction,
-    updateSessionProjectAction
+    updateSessionProjectAction,
+    addBudgetItemsBulkAction
 } from "@/lib/actions";
+import { parseBudgetMarkdown } from "@/lib/budgetParser";
 
 
 // Removed Dynamic3DScene import
@@ -172,6 +174,9 @@ function ChatContent() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [placeholder, setPlaceholder] = useState("Message Cinelock AI...");
     const [sceneBudgets, setSceneBudgets] = useState<SceneBudget[]>([]);
+    const [shareLink, setShareLink] = useState<string | null>(null);
+    const [showShareToast, setShowShareToast] = useState(false);
+    const [isSharedView, setIsSharedView] = useState(false);
 
     // Load Scenes on mount
     useEffect(() => {
@@ -248,6 +253,10 @@ function ChatContent() {
     useEffect(() => {
         const load = async () => {
             try {
+                // Check if this is a shared view
+                const isShared = searchParams.get('shared') === 'true';
+                setIsSharedView(isShared);
+
                 const [loadedSessions, loadedProjects] = await Promise.all([
                     fetchSessions(),
                     fetchProjects()
@@ -402,6 +411,22 @@ function ChatContent() {
             } else {
                 createNewSession();
             }
+        }
+    };
+
+    const handleShare = async () => {
+        if (!currentSessionId) return;
+        
+        // Generate shareable link
+        const shareUrl = `${window.location.origin}/chat?id=${currentSessionId}&shared=true`;
+        
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            setShareLink(shareUrl);
+            setShowShareToast(true);
+            setTimeout(() => setShowShareToast(false), 3000);
+        } catch (err) {
+            console.error('Failed to copy share link:', err);
         }
     };
 
@@ -649,6 +674,7 @@ function ChatContent() {
 
                 // 2. Trigger Background Budget Analysis
                 if (imageForAnalysis && !imageForAnalysis.startsWith('/')) {
+                    console.log("[CLIENT] Starting budget analysis for image");
                     const pidForThis = currentProjectId || UNASSIGNED_PROJECT_ID;
                     let projectContext = null;
                     if (pidForThis && pidForThis !== UNASSIGNED_PROJECT_ID) {
@@ -661,10 +687,14 @@ function ChatContent() {
                                 scale: project.scale,
                                 budgetLimit: project.budgetLimit
                             };
+                            console.log("[CLIENT] Project context found:", project.name);
                         }
+                    } else {
+                        console.log("[CLIENT] No project context (Unassigned)");
                     }
 
                     // Non-blocking call
+                    console.log("[CLIENT] Calling /api/analyze-budget...");
                     fetch('/api/analyze-budget', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -673,8 +703,12 @@ function ChatContent() {
                             projectContext: projectContext
                         }),
                     })
-                        .then(res => res.json())
+                        .then(res => {
+                            console.log("[CLIENT] Budget API response status:", res.status);
+                            return res.json();
+                        })
                         .then(async budgetData => {
+                            console.log("[CLIENT] Budget data received, has content:", !!budgetData.content);
                             if (budgetData.content) {
                                 const newScene: SceneBudget = {
                                     id: assistantMsg.id,
@@ -687,18 +721,51 @@ function ChatContent() {
 
                                 setSceneBudgets(prev => [newScene, ...prev]);
 
-                                // Persist to MongoDB
-                                await createSceneAction({
-                                    id: newScene.id,
-                                    imageUrl: newScene.imageUrl,
-                                    description: newScene.description,
-                                    budgetContent: newScene.budgetContent,
-                                    projectId: newScene.projectId,
-                                    sessionId: currentSessionId || undefined // Pass current session ID
-                                });
+                                // Persist Scene to MongoDB
+                                console.log("[CLIENT] Calling createSceneAction...");
+                                try {
+                                    const sceneResult = await createSceneAction({
+                                        id: newScene.id,
+                                        imageUrl: newScene.imageUrl,
+                                        description: newScene.description,
+                                        budgetContent: newScene.budgetContent,
+                                        projectId: newScene.projectId,
+                                        sessionId: currentSessionId || undefined
+                                    });
+                                    console.log("[CLIENT] createSceneAction result:", !!sceneResult);
+                                    
+                                    // Parse and save budget items
+                                    console.log("[CLIENT] Parsing budget content to extract items...");
+                                    console.log("[CLIENT] Raw budget content:", budgetData.content.substring(0, 500));
+                                    const parsedItems = parseBudgetMarkdown(budgetData.content);
+                                    console.log("[CLIENT] Parsed", parsedItems.length, "budget items");
+                                    
+                                    if (parsedItems.length > 0) {
+                                        console.log("[CLIENT] Saving budget items to database...");
+                                        const budgetItemsData = parsedItems.map(item => ({
+                                            ...item,
+                                            id: crypto.randomUUID(),
+                                            date: '-',
+                                            sessionId: currentSessionId || undefined,
+                                            sourceMessageId: assistantMsg.id,
+                                            projectId: pidForThis
+                                        }));
+                                        
+                                        const budgetResult = await addBudgetItemsBulkAction(budgetItemsData);
+                                        console.log("[CLIENT] Budget items saved successfully:", budgetItemsData.length, "items");
+                                    } else {
+                                        console.warn("[CLIENT] No budget items could be parsed from content");
+                                    }
+                                } catch (error: any) {
+                                    console.error("[CLIENT] createSceneAction or budget save failed:", error.message);
+                                }
+                            } else {
+                                console.warn("[CLIENT] No budget content in response");
                             }
                         })
-                        .catch(e => console.error("Background budget analysis failed", e));
+                        .catch(e => {
+                            console.error("[CLIENT] Background budget analysis failed:", e.message, e);
+                        });
                 }
 
             } else { // Removed is3DMode branch
@@ -780,7 +847,7 @@ function ChatContent() {
                                 value={currentProjectId}
                                 onChange={(e) => handleProjectChange(e.target.value)}
                                 disabled={!currentSessionId}
-                                className="appearance-none pl-3 pr-8 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-xs text-gray-300 outline-none focus:ring-2 focus:ring-cinelock-accent/50 [&>option]:bg-[#0b1221] [&>option]:text-gray-300 cursor-pointer"
+                                className="appearance-none pl-3 pr-8 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-xs text-gray-300 outline-none focus:ring-2 focus:ring-cinelock-accent/50 [&>option]:bg-[#0b1221] [&>option]:text-gray-300 cursor-pointer"
                             >
                                 <option value={UNASSIGNED_PROJECT_ID}>Unassigned</option>
                                 {projects.map((p) => (
@@ -791,14 +858,29 @@ function ChatContent() {
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                             </div>
                         </div>
-                        <button className="p-2 hover:bg-cream-white/5 rounded-full text-gray-400 hover:text-cream-white transition-colors" title="Search">
-                            <Search className="w-5 h-5" />
+                        <button 
+                            onClick={handleShare}
+                            disabled={!currentSessionId}
+                            className="p-2 hover:bg-cream-white/5 rounded-full text-gray-400 hover:text-cream-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                            title="Share Chat"
+                        >
+                            <Share2 className="w-5 h-5" />
                         </button>
                         <button className="p-2 hover:bg-cream-white/5 rounded-full text-gray-400 hover:text-cream-white transition-colors" title="Ghost Mode">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 2C16.9706 2 21 6.02944 21 11V19C21 19.2652 20.8946 19.5195 20.707 19.707L18.707 21.707C18.37 22.0441 17.8419 22.0964 17.4453 21.832L15 20.2012L12.5547 21.832C12.2188 22.056 11.7812 22.056 11.4453 21.832L9 20.2012L6.55469 21.832C6.15806 22.0964 5.63003 22.0441 5.29297 21.707L3.29297 19.707C3.10543 19.5195 3 19.2652 3 19V11C3 6.02944 7.02944 2 12 2ZM12 4C8.13401 4 5 7.13401 5 11V18.5859L6.12695 19.7129L8.44531 18.168L8.5752 18.0947C8.88867 17.9475 9.26063 17.9719 9.55469 18.168L12 19.7979L14.4453 18.168L14.5752 18.0947C14.8887 17.9475 15.2606 17.9719 15.5547 18.168L17.8721 19.7129L19 18.5859V11C19 7.13401 15.866 4 12 4ZM9.5 8C10.3284 8 11 8.67157 11 9.5C11 10.3284 10.3284 11 9.5 11C8.67157 11 8 10.3284 8 9.5C8 8.67157 8.67157 8 9.5 8ZM14.5 8C15.3284 8 16 8.67157 16 9.5C16 10.3284 15.3284 11 14.5 11C13.6716 11 13 10.3284 13 9.5C13 8.67157 13.6716 8 14.5 8Z"></path></svg>
                         </button>
                     </div>
                 </header>
+
+                {/* Share Toast Notification */}
+                {showShareToast && (
+                    <div className="fixed top-20 right-6 z-50 bg-green-600/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-sm font-medium">Link copied to clipboard!</span>
+                    </div>
+                )}
 
                 {/* Chat Area */}
                 {activeView === 'chat' ? (
@@ -1007,6 +1089,16 @@ function ChatContent() {
                                         ))}
                                     </div>
                                 )}
+                                
+                                {/* Shared View Notice */}
+                                {isSharedView && (
+                                    <div className="mb-3 px-4 py-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-center">
+                                        <p className="text-sm text-blue-300">
+                                            👁️ You're viewing a shared conversation (read-only)
+                                        </p>
+                                    </div>
+                                )}
+                                
                                 <div className="relative bg-[#0b1221]/50 backdrop-blur-xl border border-cream-white/10 rounded-[26px] p-3 shadow-2xl focus-within:ring-1 focus-within:ring-white/20 transition-all flex items-end gap-3">
                                     <div className="flex items-center pb-2 pl-2 shrink-0">
                                         <input
@@ -1018,7 +1110,8 @@ function ChatContent() {
                                         />
                                         <button
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="p-2 text-gray-400 hover:text-cream-white hover:bg-cream-white/5 rounded-full transition-colors"
+                                            disabled={isSharedView}
+                                            className="p-2 text-gray-400 hover:text-cream-white hover:bg-cream-white/5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             title="Attach PDF"
                                         >
                                             <Paperclip className="w-5 h-5" />
@@ -1034,8 +1127,9 @@ function ChatContent() {
                                                 handleChat();
                                             }
                                         }}
-                                        placeholder={placeholder}
-                                        className="flex-1 bg-transparent text-cream-white placeholder-gray-400 text-lg pl-2 pr-2 py-3 outline-none resize-none custom-scrollbar min-h-[52px]"
+                                        placeholder={isSharedView ? "This is a shared conversation (read-only)" : placeholder}
+                                        disabled={isSharedView}
+                                        className="flex-1 bg-transparent text-cream-white placeholder-gray-400 text-lg pl-2 pr-2 py-3 outline-none resize-none custom-scrollbar min-h-[52px] disabled:opacity-50 disabled:cursor-not-allowed"
                                         rows={1}
                                         style={{ maxHeight: '200px' }}
                                         onInput={(e) => {
@@ -1049,8 +1143,9 @@ function ChatContent() {
                                             onClick={() => {
                                                 setIsImageMode(!isImageMode);
                                             }}
+                                            disabled={isSharedView}
                                             className={cn(
-                                                "p-2 rounded-full transition-all duration-300 relative group/btn",
+                                                "p-2 rounded-full transition-all duration-300 relative group/btn disabled:opacity-50 disabled:cursor-not-allowed",
                                                 isImageMode
                                                     ? "text-cinelock-accent bg-cinelock-accent/10"
                                                     : "text-gray-400 hover:text-cream-white hover:bg-cream-white/5"
@@ -1062,9 +1157,9 @@ function ChatContent() {
                                         {/* Removed 3D button */}
                                         <button
                                             onClick={handleChat}
-                                            disabled={!prompt.trim() || isGenerating}
+                                            disabled={!prompt.trim() || isGenerating || isSharedView}
                                             className={cn(
-                                                "p-2 rounded-full transition-all",
+                                                "p-2 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed",
                                                 prompt.trim()
                                                     ? "bg-[radial-gradient(100%_100%_at_0%_0%,#F5F5DC_0%,#A8D4E6_50%,#0066CC_100%)] text-[#012a4a] hover:opacity-90 shadow-lg shadow-blue-900/40"
                                                     : "bg-[#424242] text-gray-500 cursor-not-allowed"
