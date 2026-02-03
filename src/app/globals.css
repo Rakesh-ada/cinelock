@@ -1,0 +1,190 @@
+@import "tailwindcss";
+
+@theme {
+  /* New Palette */
+  --color-deep-space: #012a4a;
+  --color-yale-dark: #013a63;
+  --color-yale-light: #01497c;
+  --color-dusk: #014f86;
+  --color-cerulean-rich: #2a6f97;
+  --color-cerulean: #2c7da0;
+  --color-blue-green: #468faf;
+  --color-pacific: #61a5c2;
+  --color-sky: #89c2d9;
+  --color-blue-light: #a9d6e5;
+
+  /* Custom white */
+  --color-cream-white: #F5F5DC;
+
+  /* Semantic Mappings */
+  --color-cinelock-dark: var(--color-deep-space);
+  --color-cinelock-gray: var(--color-yale-dark);
+  /* Used as secondary bg */
+  --color-cinelock-teal: var(--color-cerulean);
+  /* Used as teal-ish accent */
+  --color-cinelock-blue: var(--color-dusk);
+  /* Used as deep blue accent */
+  --color-cinelock-accent: var(--color-sky);
+  /* Main bright accent */
+
+  /* Fonts */
+  --font-display: var(--font-outfit), sans-serif;
+  --font-sans: var(--font-inter), sans-serif;
+  --font-serif: var(--font-cinzel), serif;
+
+  /* Animations */
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@utility bg-cinematic-gradient {
+  background-image: linear-gradient(to right bottom, var(--color-deep-space), var(--color-yale-dark), var(--color-dusk));
+}
+
+@utility bg-glow-conic {
+  background-image: conic-gradient(from 180deg at 50% 50%, var(--color-pacific) 0deg, var(--color-blue-green) 180deg, var(--color-sky) 360deg);
+}
+
+@utility text-gradient-cinematic {
+  background-image: linear-gradient(to right, #0066CC, #5BA3D9, #A8D4E6, #F5F5DC);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+@utility text-gradient-subtle {
+  background-image: linear-gradient(to bottom right, var(--color-cream-white), var(--color-blue-light));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Custom Base Styles */
+:root {
+  --background: #012a4a;
+  --foreground: #F5F5DC;
+  /* Lightest blueish white for better contrast on blue */
+}
+
+body {
+  color: var(--foreground);
+  background: linear-gradient(to bottom, var(--color-deep-space) 0%, var(--color-yale-dark) 40%, #000000 90%);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Noise Texture */
+.bg-noise {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  animation: grain 8s steps(10) infinite;
+}
+
+@keyframes grain {
+
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  10% {
+    transform: translate(-5%, -10%);
+  }
+
+  20% {
+    transform: translate(-15%, 5%);
+  }
+
+  30% {
+    transform: translate(7%, -25%);
+  }
+
+  40% {
+    transform: translate(-5%, 25%);
+  }
+
+  50% {
+    transform: translate(-15%, 10%);
+  }
+
+  60% {
+    transform: translate(15%, 0%);
+  }
+
+  70% {
+    transform: translate(0%, 15%);
+  }
+
+  80% {
+    transform: translate(3%, 35%);
+  }
+
+  90% {
+    transform: translate(-10%, 10%);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-cream-white {
+    color: var(--color-cream-white);
+  }
+
+  .hover\:text-cream-white:hover {
+    color: var(--color-cream-white);
+  }
+
+  .bg-cream-white {
+    background-color: var(--color-cream-white);
+  }
+
+  .border-cream-white {
+    border-color: var(--color-cream-white);
+  }
+
+  .hover\:border-cream-white:hover {
+    border-color: var(--color-cream-white);
+  }
+
+  .hover\:bg-cream-white\/5:hover {
+    background-color: rgb(245 245 220 / 0.05);
+  }
+
+  .border-cream-white\/20 {
+    border-color: rgb(245 245 220 / 0.2);
+  }
+
+  .shadow-cream-white\/10 {
+    --tw-shadow-color: rgb(245 245 220 / 0.1);
+    --tw-shadow: var(--tw-shadow-colored);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

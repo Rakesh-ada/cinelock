@@ -1,0 +1,10 @@
+--- MongoDB Connection Test ---
+Reading URI from: /home/rakesh/cinelock/.env.local
+Testing Connection to: mongodb+srv://rakesh:****@cinelock.fwpgnmo.mongodb.net/?appName=cinelock
+Attempting to connect...
+✅ Connection Successful!
+Connection State: 1 (1 = connected)
+Listing Collections...
+Collections found: [ 'chatsessions', 'projects', 'budgetitems' ]
+✅ Test Passed. Database credentials are correct.
+Disconnected.
