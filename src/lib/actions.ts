@@ -70,6 +70,39 @@ export async function createProjectAction(data: Partial<IProject> & { name: stri
     return JSON.parse(JSON.stringify(newProject));
 }
 
+export async function deleteProjectAction(id: string) {
+    const { userId } = await auth();
+    if (!userId) return;
+
+    await connectToDatabase();
+
+    // Delete the project
+    await Project.deleteOne({ id, userId });
+
+    // Unassign sessions (set projectId to UNASSIGNED_ID or undefined? 
+    // The codebase uses 'unassigned' string literal in some places, likely defined in data.ts)
+    // We'll check data.ts constant import, assuming 'unassigned'.
+    await ChatSession.updateMany(
+        { projectId: id, userId },
+        { $set: { projectId: 'unassigned' } }
+    );
+
+    // Unassign budget items
+    await BudgetItem.updateMany(
+        { projectId: id, userId },
+        { $set: { projectId: 'unassigned' } }
+    );
+
+    // Scenes?
+    await Scene.updateMany(
+        { projectId: id, userId },
+        { $set: { projectId: 'unassigned' } }
+    );
+
+    revalidatePath('/budget');
+    revalidatePath('/chat');
+}
+
 // --- Sessions ---
 
 export async function getSessions(): Promise<IChatSession[]> {
@@ -244,7 +277,7 @@ export async function addBudgetItemsBulkAction(items: Partial<IBudgetItem>[]): P
     // @ts-ignore
     const result = await BudgetItem.bulkWrite(ops, { ordered: false });
     console.log("[ACTION] Bulk insert completed:", result.upsertedCount, "inserted,", result.modifiedCount, "modified");
-    
+
     revalidatePath('/budget');
     return [];
 }
@@ -297,7 +330,7 @@ export async function createSceneAction(data: Partial<IScene>): Promise<IScene |
         console.error("[ACTION] Database connection failed:", error.message);
         throw error;
     }
-    
+
     const newScene = await Scene.create({
         id: data.id || crypto.randomUUID(),
         imageUrl: data.imageUrl,
@@ -308,7 +341,7 @@ export async function createSceneAction(data: Partial<IScene>): Promise<IScene |
         userId,
         sessionId: data.sessionId
     });
-    
+
     console.log("[ACTION] Scene created successfully:", newScene.id);
 
     // revalidatePath('/chat'); // Scenes might be displayed in chat

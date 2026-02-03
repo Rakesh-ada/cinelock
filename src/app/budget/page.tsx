@@ -31,7 +31,8 @@ import {
     updateBudgetItemAction,
     deleteBudgetItemAction,
     updateSessionMessages,
-    deleteSessionAction
+    deleteSessionAction,
+    deleteProjectAction
 } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import { STUDIO_BUDGET_SYSTEM_PROMPT } from "@/lib/prompts";
@@ -322,8 +323,25 @@ export default function BudgetPage() {
     }, [selectedProjectId]);
 
     const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+    const [isProjectsDropdownOpen, setIsProjectsDropdownOpen] = useState(false);
 
     // ... (existing effects)
+
+    const handleDeleteProject = async (projectId: string) => {
+        if (!confirm("Are you sure you want to delete this project? Data will be unassigned.")) return;
+
+        // Optimistic update
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+        if (selectedProjectId === projectId) {
+            setSelectedProjectId('all');
+        }
+
+        await deleteProjectAction(projectId);
+
+        // Refresh to be sure
+        const allProjects = await fetchProjects();
+        setProjects(allProjects);
+    };
 
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [editValues, setEditValues] = useState<Partial<BudgetItem>>({});
@@ -473,28 +491,81 @@ export default function BudgetPage() {
                     </div>
 
                     <div className="flex gap-3">
-                        <div className="relative group">
-                            <select
-                                value={selectedProjectId}
-                                onChange={(e) => setSelectedProjectId(e.target.value)}
-                                className="appearance-none pl-4 pr-10 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-sm text-gray-300 outline-none focus:ring-2 focus:ring-cinelock-accent/50 [&>option]:bg-[#0b1221] [&>option]:text-gray-300 cursor-pointer min-w-[140px]"
+                        <div className="relative group z-50">
+                            <button
+                                onClick={() => setIsProjectsDropdownOpen(!isProjectsDropdownOpen)}
+                                className="flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-sm text-gray-300 min-w-[160px]"
                             >
-                                <option value="all">All Projects</option>
-                                {projects.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500 group-hover:text-gray-300 transition-colors">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                            </div>
+                                <span className="truncate max-w-[120px]">
+                                    {selectedProjectId === 'all'
+                                        ? "All Projects"
+                                        : projects.find(p => p.id === selectedProjectId)?.name || "Select Project"}
+                                </span>
+                                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isProjectsDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isProjectsDropdownOpen && (
+                                <>
+                                    <div
+                                        className="fixed inset-0 z-40"
+                                        onClick={() => setIsProjectsDropdownOpen(false)}
+                                    ></div>
+                                    <div className="absolute right-0 top-full mt-2 w-64 bg-[#0b1221] border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 flex flex-col py-1 animate-in fade-in zoom-in-95 duration-200">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedProjectId('all');
+                                                setIsProjectsDropdownOpen(false);
+                                            }}
+                                            className={`flex items-center px-4 py-2.5 text-sm hover:bg-white/5 transition-colors text-left w-full ${selectedProjectId === 'all' ? 'text-cinelock-accent bg-cinelock-accent/5' : 'text-gray-300'}`}
+                                        >
+                                            All Projects
+                                        </button>
+                                        <div className="h-px bg-white/5 my-1"></div>
+                                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                            {projects.map((p) => (
+                                                <div
+                                                    key={p.id}
+                                                    className={`group/item flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors ${selectedProjectId === p.id ? 'bg-white/5' : ''}`}
+                                                >
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedProjectId(p.id);
+                                                            setIsProjectsDropdownOpen(false);
+                                                        }}
+                                                        className={`text-sm text-left truncate flex-1 ${selectedProjectId === p.id ? 'text-cinelock-accent' : 'text-gray-300'}`}
+                                                    >
+                                                        {p.name}
+                                                    </button>
+
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteProject(p.id);
+                                                        }}
+                                                        className="opacity-0 group-hover/item:opacity-100 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
+                                                        title="Delete Project"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="h-px bg-white/5 my-1"></div>
+                                        <button
+                                            onClick={() => {
+                                                setIsCreateProjectOpen(true);
+                                                setIsProjectsDropdownOpen(false);
+                                            }}
+                                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors w-full text-left"
+                                        >
+                                            <Plus className="w-4 h-4" /> Create New Project
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
-                        <button
-                            onClick={handleCreateProject}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-sm text-gray-300 group"
-                        >
-                            <Plus className="w-4 h-4 text-cinelock-accent group-hover:scale-110 transition-transform" /> New Project
-                        </button>
+
                         <button
                             onClick={handleAddExpense}
                             className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition-all text-sm font-medium shadow-[0_0_20px_-5px_rgba(16,185,129,0.5)] hover:shadow-[0_0_25px_-5px_rgba(16,185,129,0.6)]"
